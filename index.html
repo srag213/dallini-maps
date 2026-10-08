@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1020">
+  <title>دلّيني - خرائط العراق</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root{--bg:#080d16;--panel:#111a2b;--purple:#a855f7;--purple2:#7e22ce;--text:#f8fafc;--muted:#aab5c7}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif}
+    header{padding:15px 16px 12px;background:linear-gradient(135deg,#111a2b,#24103d);border-bottom:1px solid #51217a}
+    .brand{display:flex;align-items:center;gap:11px}
+    .pin{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,#c084fc,#7e22ce);font-size:25px;box-shadow:0 0 20px #a855f755}
+    h1{font-size:23px;margin:0;font-weight:900;letter-spacing:.2px}
+    .tag{color:#d8b4fe;font-size:12px;margin-top:4px}
+    .search-area{padding:12px;display:flex;gap:8px;background:var(--bg)}
+    input{min-width:0;flex:1;background:#111a2b;color:white;border:1px solid #3b2a55;border-radius:12px;padding:13px 12px;font-size:15px;outline:none}
+    input:focus{border-color:var(--purple)}
+    button{border:0;border-radius:12px;padding:11px 13px;font-size:14px;font-weight:bold;color:white;background:linear-gradient(135deg,var(--purple),var(--purple2));cursor:pointer}
+    .quick{display:flex;gap:8px;overflow-x:auto;padding:0 12px 11px}
+    .quick button{white-space:nowrap;background:#171f30;border:1px solid #3a2a50;color:#e9d5ff}
+    #map{height:calc(100dvh - 190px);min-height:390px;width:100%;background:#dbeafe}
+    .note{padding:10px 14px;color:var(--muted);font-size:11px;text-align:center;line-height:1.7}
+    .leaflet-control-attribution{font-size:9px!important}
+    .result{padding:0 12px 8px;color:#ddd6fe;font-size:12px;min-height:18px}
+    @media(min-width:700px){#map{height:calc(100vh - 180px)}.search-area{max-width:900px;margin:auto}.quick{justify-content:center}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><div class="pin">📍</div><div><h1>دلّيني</h1><div class="tag">طريقك لكل مكان 🇮🇶</div></div></div>
+  </header>
+  <div class="search-area">
+    <input id="search" type="search" placeholder="ابحث عن مدينة أو مكان..." aria-label="البحث عن مكان">
+    <button id="searchBtn">بحث 🔎</button>
+  </div>
+  <div class="result" id="result">الخريطة جاهزة — ابحث عن مكان أو حدّد موقعك.</div>
+  <div class="quick">
+    <button id="locateBtn">📍 موقعي الحالي</button>
+    <button data-city="Baghdad, Iraq">بغداد</button>
+    <button data-city="Basra, Iraq">البصرة</button>
+    <button data-city="Mosul, Iraq">الموصل</button>
+    <button data-city="Erbil, Iraq">أربيل</button>
+    <button data-city="Najaf, Iraq">النجف</button>
+  </div>
+  <div id="map" aria-label="خريطة العراق"></div>
+  <div class="note">تعتمد الخريطة على OpenStreetMap. يحتاج تحديد الموقع إلى السماح بإذن الموقع واتصال بالإنترنت. بيانات الطرق والبحث قد تختلف حسب توفر الخدمة.</div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([33.2, 43.7], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    let marker = null;
+    const result = document.getElementById('result');
+    function say(text){result.textContent=text;}
+    function setPlace(lat, lon, label, zoom=14){
+      map.setView([lat,lon],zoom);
+      if(marker) map.removeLayer(marker);
+      marker=L.marker([lat,lon]).addTo(map).bindPopup(label).openPopup();
+      say('المكان المحدد: '+label);
+    }
+    async function searchPlace(){
+      const q=document.getElementById('search').value.trim();
+      if(!q){say('اكتب اسم المدينة أو المكان أولاً.');return;}
+      say('جارٍ البحث عن المكان...');
+      try{
+        const response=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=iq&q='+encodeURIComponent(q));
+        const data=await response.json();
+        if(!data.length){say('ما لكيت نتيجة. جرّب كتابة اسم المكان بشكل أوضح.');return;}
+        setPlace(Number(data[0].lat),Number(data[0].lon),data[0].display_name,15);
+      }catch(e){say('تعذر البحث حالياً. تأكد من اتصال الإنترنت وحاول مرة ثانية.');}
+    }
+    document.getElementById('searchBtn').addEventListener('click',searchPlace);
+    document.getElementById('search').addEventListener('keydown',e=>{if(e.key==='Enter')searchPlace();});
+    document.getElementById('locateBtn').addEventListener('click',()=>{
+      if(!navigator.geolocation){say('المتصفح لا يدعم تحديد الموقع.');return;}
+      say('جارٍ تحديد موقعك... وافق على طلب الموقع إذا ظهر.');
+      navigator.geolocation.getCurrentPosition(
+        p=>setPlace(p.coords.latitude,p.coords.longitude,'موقعك الحالي',16),
+        e=>say('ما قدرنا نحدد موقعك. تأكد من إذن الموقع، وأن الصفحة تعمل عبر HTTPS.'),
+        {enableHighAccuracy:true,timeout:15000,maximumAge:60000}
+      );
+    });
+    document.querySelectorAll('[data-city]').forEach(b=>b.addEventListener('click',async()=>{
+      const city=b.dataset.city;
+      document.getElementById('search').value=city.replace(', Iraq','');
+      say('جارٍ فتح '+b.textContent+'...');
+      try{
+        const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=iq&q='+encodeURIComponent(city));
+        const d=await r.json();
+        if(d.length)setPlace(+d[0].lat,+d[0].lon,b.textContent,12);
+        else say('تعذر العثور على المدينة حالياً.');
+      }catch(e){say('تعذر تحميل المدينة. حاول مرة ثانية.');}
+    }));
+  </script>
+</body>
+</html>
